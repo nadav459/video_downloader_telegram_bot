@@ -22,7 +22,7 @@ def run_flask():
 # --- הלוגיקה של הבוט ---
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-    bot.reply_to(message, "שלום! 🎬\nשלח לי קישור לסרטון (מיוטיוב, טיקטוק, אינסטגרם וכו') ואוריד אותו עבורך.\n*שים לב: יש מגבלה של 50MB.*")
+    bot.reply_to(message, "היי שירן! 🎬\nשלח לי קישור לסרטון (מיוטיוב, טיקטוק, אינסטגרם וכו') ואוריד אותו עבורך.\n*שים לב: יש מגבלה של 50MB.*")
 
 @bot.message_handler(func=lambda message: True)
 def download_video(message):
