@@ -46,7 +46,7 @@ def download_video(message):
         else:
             bot.reply_to(message, "ההורדה הסתיימה, מעלה לטלגרם... 🚀")
             with open(filename, 'rb') as video:
-                bot.send_video(message.chat.id, video)
+                bot.send_video(message.chat.id, video, timeout=300)
         
         # מחיקת הקובץ מהשרת כדי לחסוך מקום
         os.remove(filename)
