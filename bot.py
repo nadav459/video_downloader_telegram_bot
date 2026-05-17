@@ -31,9 +31,11 @@ def download_video(message):
         status_msg = bot.reply_to(message, "מוריד את הסרטון... 🚀")
         
         # --- התיקון שמונע מסך שחור באייפון/מק (מכריח קידוד H.264) ---
+        # --- התיקון שמונע מסך שחור באייפון + שימוש בעוגיות לאינסטגרם ---
         ydl_opts = {
             'format': '22/best[ext=mp4][vcodec^=avc1]/best[ext=mp4]/best', 
             'outtmpl': filename,
+            'cookiefile': 'cookies.txt', # <--- שורת הקסם שפותחת את החסימה
             'noplaylist': True,
             'quiet': True,
             'no_warnings': True
