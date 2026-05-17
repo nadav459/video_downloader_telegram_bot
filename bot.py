@@ -31,35 +31,48 @@ def download_video(message):
         status_msg = bot.reply_to(message, "מעבד את הסרטון בצינור המהיר... 🚀")
         
         # פנייה ל-API הציבורי של Cobalt
-        cobalt_url = "https://api.cobalt.tools/api/json"
+        # רשימת שרתי קהילה של Cobalt (גיבויים למקרה של עומס)
+        cobalt_instances = [
+            "https://api.cobalt.tools/api/json",
+            "https://api.cobalt.squables.app/api/json",
+            "https://cobalt-api.kwiatekm.dev/api/json",
+            "https://imput.net/api/json"
+        ]
+        
         headers = {
             "Accept": "application/json",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            # מוסיפים User-Agent כללי כדי שחלק מהשרתים לא יחסמו אותנו
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         }
         payload = {
             "url": url,
-            "videoQuality": "720", # איכות מצוינת ששומרת על משקל נמוך מ-50MB לרוב
+            "videoQuality": "720", 
             "filenamePattern": "basic"
         }
         
-        response = requests.post(cobalt_url, json=payload, headers=headers)
+        stream_url = None
         
-        if response.status_code != 200:
-            raise Exception("שרת ההורדות עמוס, נסה שוב בעוד רגע.")
-            
-        data = response.json()
-        
-        # בדיקה אם השרת החזיר שגיאה
-        if data.get("status") == "error":
-            raise Exception(data.get("text", "שגיאה בעיבוד הסרטון."))
-            
-        stream_url = data.get("url")
+        # הבוט רץ על השרתים אחד אחרי השני. אם אחד נכשל, עוברים להבא
+        for api_url in cobalt_instances:
+            try:
+                response = requests.post(api_url, json=payload, headers=headers, timeout=10)
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("status") != "error":
+                        stream_url = data.get("url")
+                        if stream_url:
+                            break # מצאנו שרת שעובד! עוצרים את החיפוש
+            except Exception as e:
+                continue # השרת הזה לא ענה או קרס, עוברים לשרת הבא ברשימה
+                
+        # אם עברנו על כל הרשימה ואף שרת לא עבד
         if not stream_url:
-            raise Exception("לא נמצא קישור ישיר לקובץ.")
+            raise Exception("כל שרתי הגיבוי עמוסים כרגע. נסה שוב בעוד דקה.")
             
         bot.edit_message_text("העיבוד הסתיים! מוריד ומעלה לטלגרם... ⏳", chat_id=message.chat.id, message_id=status_msg.message_id)
         
-        # הורדת הקובץ לשרת של Render כדי לבדוק גודל
+        # הורדת הקובץ לשרת של Render 
         with requests.get(stream_url, stream=True) as r:
             r.raise_for_status()
             with open(filename, 'wb') as f:
