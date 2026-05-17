@@ -4,7 +4,7 @@ import os
 import threading
 from flask import Flask
 
-# הכנס את הטוקן שקיבלת מ-BotFather כאן - זכור לשים את הטוקן החדש!
+# הכנס את הטוקן שקיבלת מ-BotFather כאן
 TOKEN = '8361927641:AAHfz5_1Sb2SFM5mWl6-t2VfKFL4v-zaACo'
 bot = telebot.TeleBot(TOKEN)
 
@@ -58,7 +58,6 @@ def download_video(message):
             # מחיקת הקובץ מהשרת כדי לחסוך מקום
             os.remove(filename)
             
-    # החלק החדש - תופס כל שגיאה ומדפיס אותה ישירות לבוט
     except Exception as e:
         error_msg = str(e)
         try:
