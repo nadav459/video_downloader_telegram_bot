@@ -1,12 +1,8 @@
 import telebot
-import yt_dlp
 import os
 import threading
+import requests
 from flask import Flask
-
-# --- קסם: הוספת FFmpeg לשרת כדי שנוכל למזג שורטים ---
-import static_ffmpeg
-static_ffmpeg.add_paths()
 
 # הכנס את הטוקן שקיבלת מ-BotFather כאן
 TOKEN = '8361927641:AAHfz5_1Sb2SFM5mWl6-t2VfKFL4v-zaACo'
@@ -24,71 +20,81 @@ def run_flask():
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-    bot.reply_to(message, "היי! 🎬\nשלח לי קישור לסרטון ואוריד אותו עבורך.\n*שימו לב: הבוט מוריד באיכות המותאמת למגבלת טלגרם (עד 50MB).*")
+    bot.reply_to(message, "היי! 🎬\nשלח לי קישור לסרטון (מיוטיוב, טיקטוק, אינסטגרם וכדו') ואוריד אותו עבורך בשניות.\n*שימו לב: יש מגבלה של 50MB.*")
 
 @bot.message_handler(func=lambda message: True)
 def download_video(message):
     url = message.text
+    filename = f"video_{message.message_id}.mp4"
     
     try:
-        status_msg = bot.reply_to(message, "מתחיל בהורדה... מכין את הסרטון ⏳")
+        status_msg = bot.reply_to(message, "מעבד את הסרטון בצינור המהיר... 🚀")
         
-        # הגדרות yt-dlp - עכשיו הוא יודע למזג וידאו ואודיו!
-        # הגדרות yt-dlp - מוריד את הטוב ביותר ללא תלות בפורמט המקור, וממיר ל-MP4
-        # הגדרות yt-dlp - נותנים לו לעשות את הקסם בעצמו עם כוכבית לחיפוש רחב
-        # הגדרות yt-dlp - שימוש ב-OAuth כדי לעקוף חסימות IP לצמיתות
-        # הגדרות yt-dlp סופיות - עוגיות + התאמת דפדפן מלאה
-        ydl_opts = {
-            'format': 'bestvideo*+bestaudio/best',
-            'merge_output_format': 'mp4', 
-            'outtmpl': 'video_%(id)s.%(ext)s',
-            'noplaylist': True,
-            'quiet': True,
-            'no_warnings': True,
-            'cookiefile': 'cookies.txt', # שים שוב את קובץ העוגיות בתיקייה
-            'http_headers': {
-                # החלף את הטקסט למטה בטקסט שיופיע לך בגוגל
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36'
-            }
+        # פנייה ל-API הציבורי של Cobalt
+        cobalt_url = "https://api.cobalt.tools/api/json"
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "url": url,
+            "videoQuality": "720", # איכות מצוינת ששומרת על משקל נמוך מ-50MB לרוב
+            "filenamePattern": "basic"
         }
         
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            # בגלל המיזוג, לפעמים הסיומת משתנה ל-mp4. נוודא שאנחנו מחפשים את הקובץ הנכון
-            if not os.path.exists(filename):
-                filename = filename.rsplit('.', 1)[0] + '.mp4'
+        response = requests.post(cobalt_url, json=payload, headers=headers)
         
-        # בדיקת גודל הקובץ לפני השליחה (מגבלת 50MB של טלגרם)
+        if response.status_code != 200:
+            raise Exception("שרת ההורדות עמוס, נסה שוב בעוד רגע.")
+            
+        data = response.json()
+        
+        # בדיקה אם השרת החזיר שגיאה
+        if data.get("status") == "error":
+            raise Exception(data.get("text", "שגיאה בעיבוד הסרטון."))
+            
+        stream_url = data.get("url")
+        if not stream_url:
+            raise Exception("לא נמצא קישור ישיר לקובץ.")
+            
+        bot.edit_message_text("העיבוד הסתיים! מוריד ומעלה לטלגרם... ⏳", chat_id=message.chat.id, message_id=status_msg.message_id)
+        
+        # הורדת הקובץ לשרת של Render כדי לבדוק גודל
+        with requests.get(stream_url, stream=True) as r:
+            r.raise_for_status()
+            with open(filename, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+        
+        # בדיקת מגבלת ה-50MB של טלגרם
         if os.path.exists(filename):
             file_size = os.path.getsize(filename)
             if file_size > 50 * 1024 * 1024:
-                bot.edit_message_text("הסרטון כבד מדי (מעל 50MB) גם לאחר כיווץ, ולכן טלגרם חוסמת אותו. 😔", chat_id=message.chat.id, message_id=status_msg.message_id)
+                bot.edit_message_text("הסרטון שוקל יותר מ-50MB ולכן טלגרם חוסמת את השליחה שלו. 😔", chat_id=message.chat.id, message_id=status_msg.message_id)
             else:
-                bot.edit_message_text("ההורדה הסתיימה, מעלה לטלגרם... 🚀", chat_id=message.chat.id, message_id=status_msg.message_id)
-                
                 with open(filename, 'rb') as video:
                     bot.send_video(message.chat.id, video, timeout=300)
-            
-            # מחיקת הקובץ
-            os.remove(filename)
-            
+                # מוחקים את הודעת הסטטוס כדי להשאיר צ'אט נקי
+                bot.delete_message(message.chat.id, status_msg.message_id)
+        
     except Exception as e:
-        error_msg = str(e)
         try:
-            bot.edit_message_text(f"שגיאה בהורדה. הטקסט המדויק:\n{error_msg[:200]}", chat_id=message.chat.id, message_id=status_msg.message_id)
+            bot.edit_message_text(f"אופס, משהו השתבש.\nפרטי השגיאה: {str(e)[:100]}", chat_id=message.chat.id, message_id=status_msg.message_id)
         except:
             pass
-        
-        # ניקיון שאריות
-        for file in os.listdir():
-            if file.startswith("video_") and file != "video_%(id)s.%(ext)s":
-                try:
-                    os.remove(file)
-                except:
-                    pass
+            
+    finally:
+        # בלוק שמבטיח מחיקה של הקובץ מהשרת בכל מצב (הצלחה או כישלון)
+        if os.path.exists(filename):
+            try:
+                os.remove(filename)
+            except:
+                pass
 
 if __name__ == '__main__':
+    # הפעלת שרת האינטרנט בתהליך מקביל
     threading.Thread(target=run_flask).start()
+    
+    # הפעלת הבוט
     print("Bot is listening...")
     bot.infinity_polling(timeout=60, long_polling_timeout=60)
