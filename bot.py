@@ -36,14 +36,14 @@ def download_video(message):
         # הגדרות yt-dlp - עכשיו הוא יודע למזג וידאו ואודיו!
         # הגדרות yt-dlp - מוריד את הטוב ביותר ללא תלות בפורמט המקור, וממיר ל-MP4
         ydl_opts = {
-            'format': 'bestvideo+bestaudio/best',
+            'format': 'bestvideo*+bestaudio/best', # הוספנו כוכבית!
             'merge_output_format': 'mp4', 
             'outtmpl': 'video_%(id)s.%(ext)s',
             'noplaylist': True,
             'quiet': True,
             'no_warnings': True,
-            'cookiefile': 'cookies.txt',
-            'extractor_args': {'youtube': ['player_client=android,web']}
+            'cookiefile': 'cookies.txt'
+            # מחקנו את ה-extractor_args כדי שיוטיוב לא תסתיר לנו פורמטים
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
