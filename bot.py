@@ -37,6 +37,7 @@ def download_video(message):
         # הגדרות yt-dlp - מוריד את הטוב ביותר ללא תלות בפורמט המקור, וממיר ל-MP4
         # הגדרות yt-dlp - נותנים לו לעשות את הקסם בעצמו עם כוכבית לחיפוש רחב
         # הגדרות yt-dlp - שימוש ב-OAuth כדי לעקוף חסימות IP לצמיתות
+        # הגדרות yt-dlp סופיות - עוגיות + התאמת דפדפן מלאה
         ydl_opts = {
             'format': 'bestvideo*+bestaudio/best',
             'merge_output_format': 'mp4', 
@@ -44,9 +45,11 @@ def download_video(message):
             'noplaylist': True,
             'quiet': True,
             'no_warnings': True,
-            # הפקודה שמפעילה את החיבור המאובטח ומאפשרת לך לאשר אותו מהנייד
-            'username': 'oauth2',
-            'password': ''
+            'cookiefile': 'cookies.txt', # שים שוב את קובץ העוגיות בתיקייה
+            'http_headers': {
+                # החלף את הטקסט למטה בטקסט שיופיע לך בגוגל
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36'
+            }
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
