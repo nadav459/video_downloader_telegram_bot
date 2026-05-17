@@ -42,7 +42,7 @@ def download_video(message):
         # --- הגדרות ה-API של RapidAPI ---
         api_url = "https://youtube-media-downloader.p.rapidapi.com/v2/video/details"
         headers = {
-            "x-rapidapi-key": "הכנס_את_המפתח_כאן", # זכור להחזיר פה את המפתח שלך!
+            "x-rapidapi-key": "b4a2f511b3mshca2e3aedcf3e427p1f6aadjsnedea0c48fa16", # זכור להחזיר פה את המפתח שלך!
             "x-rapidapi-host": "youtube-media-downloader.p.rapidapi.com"
         }
         querystring = {"videoId": video_id, "videos": "auto"}
@@ -106,8 +106,8 @@ def download_video(message):
                 os.remove(filename)
             except:
                 pass
-            
+
 if __name__ == '__main__':
     threading.Thread(target=run_flask).start()
     print("Bot is listening...")
-    bot.infinity_polling(timeout)
+bot.infinity_polling(timeout=60, long_polling_timeout=60)
