@@ -36,6 +36,7 @@ def download_video(message):
         # הגדרות yt-dlp - עכשיו הוא יודע למזג וידאו ואודיו!
         # הגדרות yt-dlp - מוריד את הטוב ביותר ללא תלות בפורמט המקור, וממיר ל-MP4
         # הגדרות yt-dlp - נותנים לו לעשות את הקסם בעצמו עם כוכבית לחיפוש רחב
+        # הגדרות yt-dlp - שימוש ב-OAuth כדי לעקוף חסימות IP לצמיתות
         ydl_opts = {
             'format': 'bestvideo*+bestaudio/best',
             'merge_output_format': 'mp4', 
@@ -43,8 +44,9 @@ def download_video(message):
             'noplaylist': True,
             'quiet': True,
             'no_warnings': True,
-            # מתחפשים לאפליקציית מובייל ונגן מוטמע כדי לדלג על חסימות בוטים, ללא עוגיות!
-            'extractor_args': {'youtube': ['player_client=ios,android,web_embedded']}
+            # הפקודה שמפעילה את החיבור המאובטח ומאפשרת לך לאשר אותו מהנייד
+            'username': 'oauth2',
+            'password': ''
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
