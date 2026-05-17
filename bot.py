@@ -26,51 +26,49 @@ def send_welcome(message):
 def download_video(message):
     url = message.text
     filename = f"video_{message.message_id}.mp4"
+    status_msg = None # מאתחלים כדי שלא יקרוס
     
     try:
-        # שליפת ה-ID של הוידאו מתוך הקישור (מתמודד עם Shorts, URL רגיל ו-youtu.be)
-        match = re.search(r"(?:v=|\/shorts\/|youtu\.be\/)([0-9A-Za-z_-]{11})", url)
+        # 1. קודם כל עונים, שנדע שהוא חי!
+        status_msg = bot.reply_to(message, "שואב את הסרטון דרך ה-API... 🚀")
+        
+        # 2. שולפים את ה-ID (הוספתי תמיכה בעוד פורמטים של קישורים מיוטיוב)
+        match = re.search(r"(?:v=|\/shorts\/|youtu\.be\/|youtube\.com\/shorts\/)([0-9A-Za-z_-]{11})", url)
         if not match:
-            raise Exception("לא זיהיתי קישור תקין של יוטיוב.")
+            raise Exception("לא מצאתי פה קישור תקין של יוטיוב.")
+            
         video_id = match.group(1)
-
-        status_msg = bot.reply_to(message, "שואב את הסרטון דרך ה-API הפרטי... 🚀")
         
-        # --- הגדרות ה-API של RapidAPI (מהמסך שלך) ---
+        # --- הגדרות ה-API של RapidAPI ---
         api_url = "https://youtube-media-downloader.p.rapidapi.com/v2/video/details"
-        
         headers = {
-            "x-rapidapi-key": "b4a2f511b3mshca2e3aedcf3e427p1f6aadjnsnedea0c48fa16",
+            "x-rapidapi-key": "הכנס_את_המפתח_כאן", # זכור להחזיר פה את המפתח שלך!
             "x-rapidapi-host": "youtube-media-downloader.p.rapidapi.com"
         }
-        
         querystring = {"videoId": video_id, "videos": "auto"}
         
         response = requests.get(api_url, headers=headers, params=querystring)
         
         if response.status_code != 200:
-            raise Exception("שגיאה בתקשורת מול ה-API המרכזי.")
+            raise Exception("שגיאה מול שרת ההורדות.")
             
         data = response.json()
         
-        # פיענוח ה-JSON של ה-API הספציפי הזה כדי למצוא את קישור ה-mp4
+        # חיפוש הקישור המשולב
         stream_url = None
         try:
             items = data.get("videos", {}).get("items", [])
             for item in items:
-                # מחפשים גרסה שכוללת גם אודיו וגם וידאו
                 if item.get("hasAudio") and item.get("extension") == "mp4":
                     stream_url = item.get("url")
                     break
-            # אם לא מצאנו פורמט משולב, פשוט ניקח את הלינק הראשון
             if not stream_url and items:
                 stream_url = items[0].get("url")
         except:
             pass
             
         if not stream_url:
-            print("API Data:", data) # שומר ב-Logs את התשובה כדי שנוכל לחקור אם משהו השתנה
-            raise Exception("לא מצאתי קישור ישיר להורדה בתוך התשובה של יוטיוב.")
+            raise Exception("לא נמצא קובץ מתאים בשרת.")
             
         bot.edit_message_text("העיבוד הסתיים! מוריד ומעלה לטלגרם... ⏳", chat_id=message.chat.id, message_id=status_msg.message_id)
         
@@ -85,26 +83,30 @@ def download_video(message):
         if os.path.exists(filename):
             file_size = os.path.getsize(filename)
             if file_size > 50 * 1024 * 1024:
-                bot.edit_message_text("הסרטון שוקל יותר מ-50MB ולכן טלגרם חוסמת את השליחה שלו. 😔", chat_id=message.chat.id, message_id=status_msg.message_id)
+                bot.edit_message_text("הסרטון שוקל יותר מ-50MB ולכן טלגרם חוסמת אותו. 😔", chat_id=message.chat.id, message_id=status_msg.message_id)
             else:
                 with open(filename, 'rb') as video:
                     bot.send_video(message.chat.id, video, timeout=300)
                 bot.delete_message(message.chat.id, status_msg.message_id)
         
     except Exception as e:
+        # עכשיו הוא תמיד ידווח מה קרה
+        error_text = f"אופס, משהו השתבש.\nפרטי השגיאה: {str(e)[:100]}"
         try:
-            bot.edit_message_text(f"אופס, משהו השתבש.\nפרטי השגיאה: {str(e)[:100]}", chat_id=message.chat.id, message_id=status_msg.message_id)
+            if status_msg:
+                bot.edit_message_text(error_text, chat_id=message.chat.id, message_id=status_msg.message_id)
+            else:
+                bot.reply_to(message, error_text)
         except:
             pass
             
     finally:
-        # ניקיון השרת תמיד!
         if os.path.exists(filename):
             try:
                 os.remove(filename)
             except:
                 pass
-
+            
 if __name__ == '__main__':
     threading.Thread(target=run_flask).start()
     print("Bot is listening...")
