@@ -31,12 +31,15 @@ def download_video(message):
         status_msg = bot.reply_to(message, "מתחיל בהורדה... מכין את הסרטון ⏳")
         
         # הגדרות yt-dlp - נבקש פשוט את הגרסה המשולבת. בדיקת ה-50 מגה תתבצע אחרי ההורדה
+        # הגדרות yt-dlp 
         ydl_opts = {
             'format': 'best', 
             'outtmpl': 'video_%(id)s.%(ext)s',
             'noplaylist': True,
             'quiet': True,
-            'no_warnings': True
+            'no_warnings': True,
+            'cookiefile': 'cookies.txt', # קורא את קובץ העוגיות שהורדנו
+            'extractor_args': {'youtube': ['player_client=android,web']} # מתחפש למובייל
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
