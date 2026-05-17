@@ -31,9 +31,9 @@ def download_video(message):
         status_msg = bot.reply_to(message, "מתחיל בהורדה... מכין את הסרטון ⏳")
         
         # הגדרות yt-dlp משופרות ללא צורך ב-FFmpeg ועם הגבלת גודל
+# הגדרות yt-dlp - נבקש פשוט את הגרסה המשולבת. בדיקת ה-50 מגה תתבצע אחרי ההורדה
         ydl_opts = {
-            # מביא את הקובץ המשולב (וידאו+אודיו) הכי טוב שקטן מ-50 מגה. פותר את בעיית השורטים!
-            'format': 'best[ext=mp4][filesize<=50M]/best[filesize<=50M]', 
+            'format': 'best', 
             'outtmpl': 'video_%(id)s.%(ext)s',
             'noplaylist': True,
             'quiet': True,
