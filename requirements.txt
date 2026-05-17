@@ -1,4 +1,4 @@
 telebot
-flask
-requests
 yt-dlp
+flask
+python-dotenv

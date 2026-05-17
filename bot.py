@@ -3,9 +3,11 @@ import os
 import threading
 import yt_dlp
 from flask import Flask
+import os
+from dotenv import load_dotenv
 
-# הטוקן שהדבקת לי (אגב, ממליץ לעשות לו Revoke מתישהו כשיהיה לך כוח כי הוא נחשף פה)
-TOKEN = '8361927641:AAE108imYXrhoqSfpiKQqhltyFhWRnLZX8w'
+load_dotenv()
+TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
 app = Flask(__name__)
@@ -28,18 +30,14 @@ def download_video(message):
     status_msg = None 
     
     try:
-        status_msg = bot.reply_to(message, "מוריד את הסרטון... 🚀")
-        
-        # --- התיקון שמונע מסך שחור באייפון/מק (מכריח קידוד H.264) ---
-        # --- התיקון שמונע מסך שחור באייפון + שימוש בעוגיות לאינסטגרם ---
+        status_msg = bot.reply_to(message, "מוריד את הסרטון...")
         ydl_opts = {
-            'format': '22/best[ext=mp4][vcodec^=avc1]/best[ext=mp4]/best', 
-            'outtmpl': filename,
-            'cookiefile': 'cookies.txt', # <--- שורת הקסם שפותחת את החסימה
-            'noplaylist': True,
-            'quiet': True,
-            'no_warnings': True
-        }
+    'format': 'best[ext=mp4][filesize<45M]/best[filesize<45M]/best',
+    'outtmpl': filename,
+    'noplaylist': True,
+    'quiet': True,
+    'no_warnings': True,
+}
         
         # מוריד עצמאית בתוך השרת
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
