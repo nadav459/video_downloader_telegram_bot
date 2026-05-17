@@ -72,8 +72,13 @@ def download_video(message):
             
         bot.edit_message_text("העיבוד הסתיים! מוריד ומעלה לטלגרם... ⏳", chat_id=message.chat.id, message_id=status_msg.message_id)
         
-        # מוריד לשרת של Render
-        with requests.get(stream_url, stream=True) as r:
+        # הגדרת "תחפושת" של דפדפן כדי שיוטיוב לא תחסום את ההורדה
+        download_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        }
+        
+        # מוריד לשרת של Render עם ה-Headers
+        with requests.get(stream_url, stream=True, headers=download_headers) as r:
             r.raise_for_status()
             with open(filename, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=8192):
