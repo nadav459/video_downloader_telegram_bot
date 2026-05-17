@@ -1,4 +1,3 @@
-TOKEN = '8361927641:AAHfz5_1Sb2SFM5mWl6-t2VfKFL4v-zaACo'
 import telebot
 import os
 import threading
@@ -6,7 +5,8 @@ import requests
 from flask import Flask
 
 # 1. חובה: שים פה טוקן *חדש* אחרי שעשית Revoke לישן ב-BotFather!
-TOKEN = 'הטוקן_החדש_שלך_כאן'
+TOKEN = '8361927641:AAHfz5_1Sb2SFM5mWl6-t2VfKFL4v-zaACo'
+
 bot = telebot.TeleBot(TOKEN)
 
 app = Flask(__name__)
