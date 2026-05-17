@@ -4,6 +4,10 @@ import os
 import threading
 from flask import Flask
 
+# --- קסם: הוספת FFmpeg לשרת כדי שנוכל למזג שורטים ---
+import static_ffmpeg
+static_ffmpeg.add_paths()
+
 # הכנס את הטוקן שקיבלת מ-BotFather כאן
 TOKEN = '8361927641:AAHfz5_1Sb2SFM5mWl6-t2VfKFL4v-zaACo'
 bot = telebot.TeleBot(TOKEN)
@@ -20,45 +24,47 @@ def run_flask():
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-    bot.reply_to(message, "היי! 🎬\nשלח לי קישור לסרטון (מיוטיוב, טיקטוק, אינסטגרם וכדו') ואוריד אותו .\n*שימו לב: הבוט מוריד באיכות המותאמת למגבלת טלגרם (עד 50MB).*")
+    bot.reply_to(message, "היי! 🎬\nשלח לי קישור לסרטון ואוריד אותו עבורך.\n*שימו לב: הבוט מוריד באיכות המותאמת למגבלת טלגרם (עד 50MB).*")
 
 @bot.message_handler(func=lambda message: True)
 def download_video(message):
     url = message.text
     
     try:
-        # שולחים הודעה ראשונית ושומרים אותה כדי שנוכל לערוך אותה בהמשך
         status_msg = bot.reply_to(message, "מתחיל בהורדה... מכין את הסרטון ⏳")
         
-        # הגדרות yt-dlp - נבקש פשוט את הגרסה המשולבת. בדיקת ה-50 מגה תתבצע אחרי ההורדה
-        # הגדרות yt-dlp 
+        # הגדרות yt-dlp - עכשיו הוא יודע למזג וידאו ואודיו!
         ydl_opts = {
-            'format': 'best', 
+            # מבקש וידאו ואודיו בנפרד (בפורמטים שטלגרם אוהבת), ואם אי אפשר - מתפשר על גרסה משולבת
+            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'merge_output_format': 'mp4', # מכריח את הקובץ הסופי להיות mp4
             'outtmpl': 'video_%(id)s.%(ext)s',
             'noplaylist': True,
             'quiet': True,
             'no_warnings': True,
-            'cookiefile': 'cookies.txt', # קורא את קובץ העוגיות שהורדנו
-            'extractor_args': {'youtube': ['player_client=android,web']} # מתחפש למובייל
+            'cookiefile': 'cookies.txt', # העוגיות שהוספת
+            'extractor_args': {'youtube': ['player_client=android,web']}
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
+            # בגלל המיזוג, לפעמים הסיומת משתנה ל-mp4. נוודא שאנחנו מחפשים את הקובץ הנכון
+            if not os.path.exists(filename):
+                filename = filename.rsplit('.', 1)[0] + '.mp4'
         
-        # מוודאים שוב את גודל הקובץ ליתר ביטחון
+        # בדיקת גודל הקובץ לפני השליחה (מגבלת 50MB של טלגרם)
         if os.path.exists(filename):
             file_size = os.path.getsize(filename)
             if file_size > 50 * 1024 * 1024:
                 bot.edit_message_text("הסרטון כבד מדי (מעל 50MB) גם לאחר כיווץ, ולכן טלגרם חוסמת אותו. 😔", chat_id=message.chat.id, message_id=status_msg.message_id)
             else:
-                # מעדכנים את ההודעה במקום לשלוח אחת חדשה
                 bot.edit_message_text("ההורדה הסתיימה, מעלה לטלגרם... 🚀", chat_id=message.chat.id, message_id=status_msg.message_id)
                 
                 with open(filename, 'rb') as video:
                     bot.send_video(message.chat.id, video, timeout=300)
             
-            # מחיקת הקובץ מהשרת כדי לחסוך מקום
+            # מחיקת הקובץ
             os.remove(filename)
             
     except Exception as e:
@@ -68,7 +74,7 @@ def download_video(message):
         except:
             pass
         
-        # מוודאים מחיקה גם במקרה של שגיאה כדי שהשרת לא יתמלא
+        # ניקיון שאריות
         for file in os.listdir():
             if file.startswith("video_") and file != "video_%(id)s.%(ext)s":
                 try:
@@ -77,9 +83,6 @@ def download_video(message):
                     pass
 
 if __name__ == '__main__':
-    # הפעלת שרת האינטרנט בתהליך מקביל
     threading.Thread(target=run_flask).start()
-    
-    # הפעלת הבוט
     print("Bot is listening...")
     bot.infinity_polling(timeout=60, long_polling_timeout=60)
