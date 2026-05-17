@@ -4,7 +4,7 @@ import os
 import threading
 from flask import Flask
 
-# הכנס את הטוקן שקיבלת מ-BotFather כאן
+# הכנס את הטוקן שקיבלת מ-BotFather כאן - זכור לשים את הטוקן החדש!
 TOKEN = '8361927641:AAHfz5_1Sb2SFM5mWl6-t2VfKFL4v-zaACo'
 bot = telebot.TeleBot(TOKEN)
 
@@ -30,8 +30,7 @@ def download_video(message):
         # שולחים הודעה ראשונית ושומרים אותה כדי שנוכל לערוך אותה בהמשך
         status_msg = bot.reply_to(message, "מתחיל בהורדה... מכין את הסרטון ⏳")
         
-        # הגדרות yt-dlp משופרות ללא צורך ב-FFmpeg ועם הגבלת גודל
-# הגדרות yt-dlp - נבקש פשוט את הגרסה המשולבת. בדיקת ה-50 מגה תתבצע אחרי ההורדה
+        # הגדרות yt-dlp - נבקש פשוט את הגרסה המשולבת. בדיקת ה-50 מגה תתבצע אחרי ההורדה
         ydl_opts = {
             'format': 'best', 
             'outtmpl': 'video_%(id)s.%(ext)s',
@@ -59,18 +58,21 @@ def download_video(message):
             # מחיקת הקובץ מהשרת כדי לחסוך מקום
             os.remove(filename)
             
-    except yt_dlp.utils.DownloadError as e:
-        bot.edit_message_text("הסרטון הזה כבד מדי או שלא נמצאה גרסה מתאימה מתחת ל-50 מגה. 😔", chat_id=message.chat.id, message_id=status_msg.message_id)
+    # החלק החדש - תופס כל שגיאה ומדפיס אותה ישירות לבוט
     except Exception as e:
+        error_msg = str(e)
         try:
-            bot.edit_message_text(f"אופס, משהו השתבש. ייתכן שהקישור לא חוקי או שהסרטון חסום.\nשגיאה: {str(e)[:50]}", chat_id=message.chat.id, message_id=status_msg.message_id)
+            bot.edit_message_text(f"שגיאה בהורדה. הטקסט המדויק:\n{error_msg[:200]}", chat_id=message.chat.id, message_id=status_msg.message_id)
         except:
-            bot.reply_to(message, "שגיאה כללית בהורדת הסרטון.")
+            pass
         
         # מוודאים מחיקה גם במקרה של שגיאה כדי שהשרת לא יתמלא
         for file in os.listdir():
             if file.startswith("video_") and file != "video_%(id)s.%(ext)s":
-                os.remove(file)
+                try:
+                    os.remove(file)
+                except:
+                    pass
 
 if __name__ == '__main__':
     # הפעלת שרת האינטרנט בתהליך מקביל
