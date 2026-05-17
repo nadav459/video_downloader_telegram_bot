@@ -10,6 +10,11 @@ load_dotenv()
 TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
+cookies_content = os.environ.get("YOUTUBE_COOKIES", "")
+if cookies_content:
+    with open("yt_cookies.txt", "w") as f:
+        f.write(cookies_content)
+
 app = Flask(__name__)
 @app.route('/')
 def index():
@@ -37,6 +42,7 @@ def download_video(message):
     'noplaylist': True,
     'quiet': True,
     'no_warnings': True,
+    'cookiefile': 'yt_cookies.txt',  # ← חזר
 }
         
         # מוריד עצמאית בתוך השרת
