@@ -34,15 +34,15 @@ def download_video(message):
         status_msg = bot.reply_to(message, "מתחיל בהורדה... מכין את הסרטון ⏳")
         
         # הגדרות yt-dlp - עכשיו הוא יודע למזג וידאו ואודיו!
+        # הגדרות yt-dlp - מוריד את הטוב ביותר ללא תלות בפורמט המקור, וממיר ל-MP4
         ydl_opts = {
-            # מבקש וידאו ואודיו בנפרד (בפורמטים שטלגרם אוהבת), ואם אי אפשר - מתפשר על גרסה משולבת
-            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-            'merge_output_format': 'mp4', # מכריח את הקובץ הסופי להיות mp4
+            'format': 'bestvideo+bestaudio/best',
+            'merge_output_format': 'mp4', 
             'outtmpl': 'video_%(id)s.%(ext)s',
             'noplaylist': True,
             'quiet': True,
             'no_warnings': True,
-            'cookiefile': 'cookies.txt', # העוגיות שהוספת
+            'cookiefile': 'cookies.txt',
             'extractor_args': {'youtube': ['player_client=android,web']}
         }
         
