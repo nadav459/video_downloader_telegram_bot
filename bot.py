@@ -20,52 +20,57 @@ def run_flask():
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-    bot.reply_to(message, "היי שירן! 🎬\nשלחי לי קישור לסרטון (מיוטיוב, טיקטוק, אינסטגרם וכדו') ואוריד אותו עבורך.\n*שימי לב: יש מגבלה של 50MB.*")
+    bot.reply_to(message, "היי! 🎬\nשלח לי קישור לסרטון (מיוטיוב, טיקטוק, אינסטגרם וכדו') ואוריד אותו .\n*שימו לב: הבוט מוריד באיכות המותאמת למגבלת טלגרם (עד 50MB).*")
+
 @bot.message_handler(func=lambda message: True)
 def download_video(message):
     url = message.text
     
     try:
-        # נסיון לשלוח הודעת פתיחה. אם החיבור נפל - נתעלם ונמשיך ישר להורדה
-        try:
-            bot.reply_to(message, "מתחיל בהורדה... זה עשוי לקחת כמה שניות ⏳")
-        except Exception as e:
-            print("Skipped initial message due to connection error.")
+        # שולחים הודעה ראשונית ושומרים אותה כדי שנוכל לערוך אותה בהמשך
+        status_msg = bot.reply_to(message, "מתחיל בהורדה... מכין את הסרטון ⏳")
         
-        # הגדרות yt-dlp - ניסיון להוריד קובץ שקטן מ-50 מגה
+        # הגדרות yt-dlp משופרות ללא צורך ב-FFmpeg ועם הגבלת גודל
         ydl_opts = {
-            'format': 'best[filesize<50M]/best', 
+            # מביא את הקובץ המשולב (וידאו+אודיו) הכי טוב שקטן מ-50 מגה. פותר את בעיית השורטים!
+            'format': 'best[ext=mp4][filesize<=50M]/best[filesize<=50M]', 
             'outtmpl': 'video_%(id)s.%(ext)s',
             'noplaylist': True,
-            'quiet': True
+            'quiet': True,
+            'no_warnings': True
         }
         
-        # הורדת הסרטון
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
         
-        # בדיקה האם הקובץ שהורד גדול מ-50MB
-        if os.path.getsize(filename) > 50 * 1024 * 1024:
-            bot.reply_to(message, "הסרטון שוקל יותר מ-50MB ולכן טלגרם חוסמת את השליחה שלו. 😔")
-        else:
-            try:
-                bot.reply_to(message, "ההורדה הסתיימה, מעלה לטלגרם... 🚀")
-            except:
-                pass # מתעלם אם הודעת הטקסט נכשלת
+        # מוודאים שוב את גודל הקובץ ליתר ביטחון
+        if os.path.exists(filename):
+            file_size = os.path.getsize(filename)
+            if file_size > 50 * 1024 * 1024:
+                bot.edit_message_text("הסרטון כבד מדי (מעל 50MB) גם לאחר כיווץ, ולכן טלגרם חוסמת אותו. 😔", chat_id=message.chat.id, message_id=status_msg.message_id)
+            else:
+                # מעדכנים את ההודעה במקום לשלוח אחת חדשה
+                bot.edit_message_text("ההורדה הסתיימה, מעלה לטלגרם... 🚀", chat_id=message.chat.id, message_id=status_msg.message_id)
+                
+                with open(filename, 'rb') as video:
+                    bot.send_video(message.chat.id, video, timeout=300)
             
-            # העלאת הסרטון עם טיימאאוט ארוך (התיקון שעשינו קודם)
-            with open(filename, 'rb') as video:
-                bot.send_video(message.chat.id, video, timeout=300)
-        
-        # מחיקת הקובץ מהשרת כדי לחסוך מקום
-        os.remove(filename)
-        
+            # מחיקת הקובץ מהשרת כדי לחסוך מקום
+            os.remove(filename)
+            
+    except yt_dlp.utils.DownloadError as e:
+        bot.edit_message_text("הסרטון הזה כבד מדי או שלא נמצאה גרסה מתאימה מתחת ל-50 מגה. 😔", chat_id=message.chat.id, message_id=status_msg.message_id)
     except Exception as e:
         try:
-            bot.reply_to(message, f"אופס, משהו השתבש בהורדה. ייתכן שהקישור לא חוקי או שהסרטון חסום.\nשגיאה: {str(e)[:50]}")
+            bot.edit_message_text(f"אופס, משהו השתבש. ייתכן שהקישור לא חוקי או שהסרטון חסום.\nשגיאה: {str(e)[:50]}", chat_id=message.chat.id, message_id=status_msg.message_id)
         except:
-            pass
+            bot.reply_to(message, "שגיאה כללית בהורדת הסרטון.")
+        
+        # מוודאים מחיקה גם במקרה של שגיאה כדי שהשרת לא יתמלא
+        for file in os.listdir():
+            if file.startswith("video_") and file != "video_%(id)s.%(ext)s":
+                os.remove(file)
 
 if __name__ == '__main__':
     # הפעלת שרת האינטרנט בתהליך מקביל
@@ -73,4 +78,4 @@ if __name__ == '__main__':
     
     # הפעלת הבוט
     print("Bot is listening...")
-    bot.infinity_polling()
+    bot.infinity_polling(timeout=60, long_polling_timeout=60)
