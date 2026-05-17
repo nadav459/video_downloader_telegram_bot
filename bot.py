@@ -2,13 +2,13 @@ import telebot
 import os
 import threading
 import requests
+import re
 from flask import Flask
 
-# הכנס את הטוקן שקיבלת מ-BotFather כאן
+# הטוקן של הבוט שלך מ-BotFather
 TOKEN = '8361927641:AAHfz5_1Sb2SFM5mWl6-t2VfKFL4v-zaACo'
 bot = telebot.TeleBot(TOKEN)
 
-# --- הגדרת שרת Flask כדי שפלטפורמות כמו Render לא יסגרו את הבוט ---
 app = Flask(__name__)
 @app.route('/')
 def index():
@@ -20,7 +20,7 @@ def run_flask():
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-    bot.reply_to(message, "היי! 🎬\nשלח לי קישור לסרטון (מיוטיוב, טיקטוק, אינסטגרם וכדו') ואוריד אותו עבורך בשניות.\n*שימו לב: יש מגבלה של 50MB.*")
+    bot.reply_to(message, "היי! 🎬\nשלחו לי קישור לסרטון ואוריד אותו עבורכם.\n*שימו לב: מגבלת טלגרם היא 50MB.*")
 
 @bot.message_handler(func=lambda message: True)
 def download_video(message):
@@ -28,58 +28,60 @@ def download_video(message):
     filename = f"video_{message.message_id}.mp4"
     
     try:
-        status_msg = bot.reply_to(message, "מעבד את הסרטון בצינור המהיר... 🚀")
+        # שליפת ה-ID של הוידאו מתוך הקישור (מתמודד עם Shorts, URL רגיל ו-youtu.be)
+        match = re.search(r"(?:v=|\/shorts\/|youtu\.be\/)([0-9A-Za-z_-]{11})", url)
+        if not match:
+            raise Exception("לא זיהיתי קישור תקין של יוטיוב.")
+        video_id = match.group(1)
+
+        status_msg = bot.reply_to(message, "שואב את הסרטון דרך ה-API הפרטי... 🚀")
         
-        # פנייה ל-API הציבורי של Cobalt
-        # רשימת שרתי קהילה של Cobalt (גיבויים למקרה של עומס)
-        cobalt_instances = [
-            "https://api.cobalt.tools/api/json",
-            "https://api.cobalt.squables.app/api/json",
-            "https://cobalt-api.kwiatekm.dev/api/json",
-            "https://imput.net/api/json"
-        ]
+        # --- הגדרות ה-API של RapidAPI (מהמסך שלך) ---
+        api_url = "https://youtube-media-downloader.p.rapidapi.com/v2/video/details"
         
         headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            # מוסיפים User-Agent כללי כדי שחלק מהשרתים לא יחסמו אותנו
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        }
-        payload = {
-            "url": url,
-            "videoQuality": "720", 
-            "filenamePattern": "basic"
+            "x-rapidapi-key": "b4a2f511b3mshca2e3aedcf3e427p1f6aadjnsnedea0c48fa16",
+            "x-rapidapi-host": "youtube-media-downloader.p.rapidapi.com"
         }
         
+        querystring = {"videoId": video_id, "videos": "auto"}
+        
+        response = requests.get(api_url, headers=headers, params=querystring)
+        
+        if response.status_code != 200:
+            raise Exception("שגיאה בתקשורת מול ה-API המרכזי.")
+            
+        data = response.json()
+        
+        # פיענוח ה-JSON של ה-API הספציפי הזה כדי למצוא את קישור ה-mp4
         stream_url = None
-        
-        # הבוט רץ על השרתים אחד אחרי השני. אם אחד נכשל, עוברים להבא
-        for api_url in cobalt_instances:
-            try:
-                response = requests.post(api_url, json=payload, headers=headers, timeout=10)
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("status") != "error":
-                        stream_url = data.get("url")
-                        if stream_url:
-                            break # מצאנו שרת שעובד! עוצרים את החיפוש
-            except Exception as e:
-                continue # השרת הזה לא ענה או קרס, עוברים לשרת הבא ברשימה
-                
-        # אם עברנו על כל הרשימה ואף שרת לא עבד
+        try:
+            items = data.get("videos", {}).get("items", [])
+            for item in items:
+                # מחפשים גרסה שכוללת גם אודיו וגם וידאו
+                if item.get("hasAudio") and item.get("extension") == "mp4":
+                    stream_url = item.get("url")
+                    break
+            # אם לא מצאנו פורמט משולב, פשוט ניקח את הלינק הראשון
+            if not stream_url and items:
+                stream_url = items[0].get("url")
+        except:
+            pass
+            
         if not stream_url:
-            raise Exception("כל שרתי הגיבוי עמוסים כרגע. נסה שוב בעוד דקה.")
+            print("API Data:", data) # שומר ב-Logs את התשובה כדי שנוכל לחקור אם משהו השתנה
+            raise Exception("לא מצאתי קישור ישיר להורדה בתוך התשובה של יוטיוב.")
             
         bot.edit_message_text("העיבוד הסתיים! מוריד ומעלה לטלגרם... ⏳", chat_id=message.chat.id, message_id=status_msg.message_id)
         
-        # הורדת הקובץ לשרת של Render 
+        # מוריד לשרת של Render
         with requests.get(stream_url, stream=True) as r:
             r.raise_for_status()
             with open(filename, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
         
-        # בדיקת מגבלת ה-50MB של טלגרם
+        # מגבלת 50 מגה
         if os.path.exists(filename):
             file_size = os.path.getsize(filename)
             if file_size > 50 * 1024 * 1024:
@@ -87,7 +89,6 @@ def download_video(message):
             else:
                 with open(filename, 'rb') as video:
                     bot.send_video(message.chat.id, video, timeout=300)
-                # מוחקים את הודעת הסטטוס כדי להשאיר צ'אט נקי
                 bot.delete_message(message.chat.id, status_msg.message_id)
         
     except Exception as e:
@@ -97,7 +98,7 @@ def download_video(message):
             pass
             
     finally:
-        # בלוק שמבטיח מחיקה של הקובץ מהשרת בכל מצב (הצלחה או כישלון)
+        # ניקיון השרת תמיד!
         if os.path.exists(filename):
             try:
                 os.remove(filename)
@@ -105,9 +106,6 @@ def download_video(message):
                 pass
 
 if __name__ == '__main__':
-    # הפעלת שרת האינטרנט בתהליך מקביל
     threading.Thread(target=run_flask).start()
-    
-    # הפעלת הבוט
     print("Bot is listening...")
-    bot.infinity_polling(timeout=60, long_polling_timeout=60)
+    bot.infinity_polling(timeout)
