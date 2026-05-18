@@ -5,7 +5,7 @@ import threading
 from flask import Flask
 
 # הכנס את הטוקן שקיבלת מ-BotFather כאן
-TOKEN = '8361927641:AAHhIaUn-hve32SbNXm_IK8W_jO6aXmFfak'
+TOKEN = os.environ.get('TELEGRAM_TOKEN')
 bot = telebot.TeleBot(TOKEN)
 
 # --- הגדרת שרת Flask כדי שפלטפורמות כמו Render לא יסגרו את הבוט ---
