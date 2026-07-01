@@ -2,3 +2,5 @@ pyTelegramBotAPI
 yt-dlp
 flask
 python-dotenv
+cloudscraper
+requests
