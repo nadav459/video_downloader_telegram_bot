@@ -26,20 +26,33 @@ def send_welcome(message):
 # פונקציית גיבוי שמשתמשת בסקרייפר שעוקף זיהוי בוטים
 def scrape_instagram_fallback(url):
     try:
-        scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
-        response = scraper.get(url, timeout=15)
+        # שימוש ב-Cobalt API (פרויקט קוד פתוח חינמי לעקיפת חסימות מדיה)
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        data = {
+            "url": url
+        }
         
-        # חיפוש הקישור הישיר ל-MP4 בתוך ה-HTML של העמוד
-        match = re.search(r'"video_url":"([^"]+)"', response.text)
-        if match:
-            video_url = match.group(1).replace('\\u0026', '&')
-            
+        # בקשה לשרת של קובלט
+        response = requests.post("https://api.cobalt.tools/api/json", json=data, headers=headers, timeout=20)
+        result = response.json()
+        
+        # חילוץ הלינק הישיר לסרטון מהתשובה
+        video_url = result.get("url")
+        
+        if video_url:
             # הורדת הקובץ הישיר
             video_data = requests.get(video_url, timeout=20).content
             filename = f"fallback_video_{os.urandom(4).hex()}.mp4"
             with open(filename, 'wb') as f:
                 f.write(video_data)
             return filename
+        else:
+            print(f"Cobalt API returned unexpected response: {result}")
+            
     except Exception as e:
         print(f"Scraper fallback failed: {e}")
     return None
