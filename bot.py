@@ -2,13 +2,14 @@ import telebot
 import yt_dlp
 import os
 import threading
+import cloudscraper
+import requests
+import re
 from flask import Flask
 
-# הכנס את הטוקן שקיבלת מ-BotFather כאן
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
 bot = telebot.TeleBot(TOKEN)
 
-# --- הגדרת שרת Flask כדי שפלטפורמות כמו Render לא יסגרו את הבוט ---
 app = Flask(__name__)
 @app.route('/')
 def index():
@@ -22,18 +23,39 @@ def run_flask():
 def send_welcome(message):
     bot.reply_to(message, "היי שירן! 🎬\nשלחי לי קישור לסרטון (מיוטיוב, טיקטוק, אינסטגרם וכדו') ואוריד אותו עבורך.\n*שימי לב: יש מגבלה של 50MB.*")
 
+# פונקציית גיבוי שמשתמשת בסקרייפר שעוקף זיהוי בוטים
+def scrape_instagram_fallback(url):
+    try:
+        scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
+        response = scraper.get(url, timeout=15)
+        
+        # חיפוש הקישור הישיר ל-MP4 בתוך ה-HTML של העמוד
+        match = re.search(r'"video_url":"([^"]+)"', response.text)
+        if match:
+            video_url = match.group(1).replace('\\u0026', '&')
+            
+            # הורדת הקובץ הישיר
+            video_data = requests.get(video_url, timeout=20).content
+            filename = f"fallback_video_{os.urandom(4).hex()}.mp4"
+            with open(filename, 'wb') as f:
+                f.write(video_data)
+            return filename
+    except Exception as e:
+        print(f"Scraper fallback failed: {e}")
+    return None
+
 @bot.message_handler(func=lambda message: True)
 def download_video(message):
     url = message.text
+    is_instagram = 'instagram.com' in url
+    filename = None
     
     try:
-        # נסיון לשלוח הודעת פתיחה. אם החיבור נפל - נתעלם ונמשיך ישר להורדה
         try:
             bot.reply_to(message, "מתחיל בהורדה... זה עשוי לקחת כמה שניות ⏳")
-        except Exception as e:
-            print("Skipped initial message due to connection error.")
+        except Exception:
+            pass
         
-        # הגדרות yt-dlp - ניסיון להוריד קובץ שקטן מ-50 מגה + קידוד מתאים לאפל!
         ydl_opts = {
             'format': 'best[vcodec^=avc1][filesize<50M]/best[filesize<50M]/best', 
             'outtmpl': 'video_%(id)s.%(ext)s',
@@ -41,25 +63,42 @@ def download_video(message):
             'quiet': True
         }
         
-        # הורדת הסרטון
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
+        # שיטה 1: הזרקת פרוקסי רק עבור אינסטגרם
+        if is_instagram:
+            proxy = os.environ.get('PROXY_URL')
+            if proxy:
+                ydl_opts['proxy'] = proxy
         
-        # בדיקה האם הקובץ שהורד גדול מ-50MB
+        # ניסיון ראשון: yt-dlp
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                filename = ydl.prepare_filename(info)
+        except Exception as e:
+            # במקרה ש-yt-dlp נכשל (נחסם) והקישור הוא של אינסטגרם - עוברים לגיבוי
+            if is_instagram:
+                bot.send_message(message.chat.id, "yt-dlp נחסם, מנסה שיטת גיבוי... 🔄")
+                filename = scrape_instagram_fallback(url)
+                if not filename:
+                    raise Exception("גם שיטת הגיבוי נכשלה מול אינסטגרם.")
+            else:
+                raise e # זורק את השגיאה הלאה אם זה לא אינסטגרם
+
+        if not filename or not os.path.exists(filename):
+            raise Exception("הקובץ לא נוצר.")
+
+        # בדיקת גודל והעלאה (נשאר זהה לקוד שלך)
         if os.path.getsize(filename) > 50 * 1024 * 1024:
             bot.reply_to(message, "הסרטון שוקל יותר מ-50MB ולכן טלגרם חוסמת את השליחה שלו. 😔")
         else:
             try:
                 bot.reply_to(message, "ההורדה הסתיימה, מעלה לטלגרם... 🚀")
             except:
-                pass # מתעלם אם הודעת הטקסט נכשלת
+                pass 
             
-            # העלאת הסרטון עם טיימאאוט ארוך למניעת קריסות
             with open(filename, 'rb') as video:
                 bot.send_video(message.chat.id, video, timeout=300)
         
-        # מחיקת הקובץ מהשרת כדי לחסוך מקום
         os.remove(filename)
         
     except Exception as e:
@@ -67,11 +106,11 @@ def download_video(message):
             bot.reply_to(message, f"אופס, משהו השתבש בהורדה. ייתכן שהקישור לא חוקי או שהסרטון חסום.\nשגיאה: {str(e)[:50]}")
         except:
             pass
+        # ניקוי קובץ במקרה של קריסה באמצע
+        if filename and os.path.exists(filename):
+            os.remove(filename)
 
 if __name__ == '__main__':
-    # הפעלת שרת האינטרנט בתהליך מקביל
     threading.Thread(target=run_flask).start()
-    
-    # הפעלת הבוט מוגן מניתוקים
     print("Bot is listening...")
     bot.infinity_polling(timeout=60, long_polling_timeout=60)
