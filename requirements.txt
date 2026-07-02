@@ -1,6 +1,5 @@
 pyTelegramBotAPI
-yt-dlp==2026.6.9
-flask
+git+https://github.com/yt-dlp/yt-dlp.git@masterflask
 python-dotenv
 cloudscraper
 requests
