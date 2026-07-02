@@ -2,9 +2,12 @@ import telebot
 import yt_dlp
 import os
 import threading
+import logging
 from flask import Flask
 
-# הכנס את הטוקן שקיבלת מ-BotFather כאן
+# הגדרת מערכת הלוגים כדי שתוכל לראות את השגיאות מאחורי הקלעים
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
 bot = telebot.TeleBot(TOKEN)
 
@@ -20,20 +23,23 @@ def run_flask():
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-    bot.reply_to(message, "היי שירן! 🎬\nשלחי לי קישור לסרטון (מיוטיוב, טיקטוק, אינסטגרם וכדו') ואוריד אותו עבורך.\n*שימי לב: יש מגבלה של 50MB.*")
+    welcome_text = (
+        "היי שירן! 🎬\n"
+        "שלחי לי קישור לסרטון (מיוטיוב, טיקטוק, אינסטגרם וכדו') ואוריד אותו עבורך.\n\n"
+        "⚠️ *שימי לב:* יש מגבלה של *50MB* לקובץ."
+    )
+    bot.reply_to(message, welcome_text, parse_mode='Markdown')
 
 @bot.message_handler(func=lambda message: True)
 def download_video(message):
     url = message.text
+    status_message = None
     
     try:
-        # נסיון לשלוח הודעת פתיחה. אם החיבור נפל - נתעלם ונמשיך ישר להורדה
-        try:
-            bot.reply_to(message, "מתחיל בהורדה... זה עשוי לקחת כמה שניות ⏳")
-        except Exception as e:
-            print("Skipped initial message due to connection error.")
+        # שליחת הודעת סטטוס ראשונית ושמירת האובייקט שלה כדי שנוכל לערוך אותה בהמשך
+        status_message = bot.reply_to(message, "⏳ *מתחיל בהורדה...*\nאנא המתן מעט", parse_mode='Markdown')
+        bot.send_chat_action(message.chat.id, 'record_video')
         
-        # הגדרות yt-dlp - ניסיון להוריד קובץ שקטן מ-50 מגה + קידוד מתאים לאפל!
         ydl_opts = {
             'format': 'best[vcodec^=avc1][filesize<50M]/best[filesize<50M]/best', 
             'outtmpl': 'video_%(id)s.%(ext)s',
@@ -46,32 +52,49 @@ def download_video(message):
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
         
-        # בדיקה האם הקובץ שהורד גדול מ-50MB
+        # בדיקת גודל קובץ
         if os.path.getsize(filename) > 50 * 1024 * 1024:
-            bot.reply_to(message, "הסרטון שוקל יותר מ-50MB ולכן טלגרם חוסמת את השליחה שלו. 😔")
+            bot.edit_message_text("⚠️ *הסרטון שוקל יותר מ-50MB* ולכן טלגרם חוסמת את השליחה שלו.", 
+                                  chat_id=message.chat.id, 
+                                  message_id=status_message.message_id, 
+                                  parse_mode='Markdown')
         else:
-            try:
-                bot.reply_to(message, "ההורדה הסתיימה, מעלה לטלגרם... 🚀")
-            except:
-                pass # מתעלם אם הודעת הטקסט נכשלת
+            # עריכת הודעת הסטטוס לאימוג'י השעון ההפוך לציון התקדמות
+            bot.edit_message_text("⌛ *ההורדה הסתיימה!*\nמעלה לטלגרם... 📤", 
+                                  chat_id=message.chat.id, 
+                                  message_id=status_message.message_id, 
+                                  parse_mode='Markdown')
             
-            # העלאת הסרטון עם טיימאאוט ארוך למניעת קריסות
+            bot.send_chat_action(message.chat.id, 'upload_video')
+            
             with open(filename, 'rb') as video:
                 bot.send_video(message.chat.id, video, timeout=300)
+                
+            # עדכון ההודעה להצלחה בסיום העלאה
+            bot.edit_message_text("✅ *הסרטון נשלח בהצלחה!*", 
+                                  chat_id=message.chat.id, 
+                                  message_id=status_message.message_id, 
+                                  parse_mode='Markdown')
         
-        # מחיקת הקובץ מהשרת כדי לחסוך מקום
+        # מחיקת הקובץ
         os.remove(filename)
         
     except Exception as e:
-        try:
-            bot.reply_to(message, f"אופס, משהו השתבש בהורדה. ייתכן שהקישור לא חוקי או שהסרטון חסום.\nשגיאה: {str(e)[:50]}")
-        except:
-            pass
+        # הדפסת השגיאה המלאה ללוגים של השרת בלבד
+        logging.error(f"Error processing URL {url}: {e}", exc_info=True)
+        
+        # הודעה נקייה למשתמש הקצה
+        error_text = "❌ *אופס, משהו השתבש בהורדה.*\nייתכן שהקישור לא חוקי או שהסרטון חסום."
+        
+        if status_message:
+            bot.edit_message_text(error_text, 
+                                  chat_id=message.chat.id, 
+                                  message_id=status_message.message_id, 
+                                  parse_mode='Markdown')
+        else:
+            bot.reply_to(message, error_text, parse_mode='Markdown')
 
 if __name__ == '__main__':
-    # הפעלת שרת האינטרנט בתהליך מקביל
     threading.Thread(target=run_flask).start()
-    
-    # הפעלת הבוט מוגן מניתוקים
-    print("Bot is listening...")
+    logging.info("Bot is listening...")
     bot.infinity_polling(timeout=60, long_polling_timeout=60)
